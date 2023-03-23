@@ -1,0 +1,75 @@
+version: "3.8"
+services:
+  web:
+    image: ibrahimfazili/urlshortner
+    deploy:
+      replicas: 3 # used to change number of hosts
+      placement:
+        max_replicas_per_node: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - "/home/student/data/url-shortner/:/golang-url-shortner/logs"
+    ports:
+      - "4000:9000"
+    depends_on:
+      - redis-secondary
+    environment:
+      - PRIMARY_REDIS_ADDR=redis-primary
+      - SECONDARY_REDIS_ADDR=redis-secondary
+      - PUBSUB_CHANNEL=writer
+      - CASSANDRA_KEYSPACE=testing
+      - CASSANDRA_TABLE=dictionary
+      - EXTERNAL_WRITER=true
+      - CASSANDRA_CONNECT_POINT=10.11.1.107
+
+  writer: 
+    image: ibrahimfazili/urlwrite
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - "/home/student/data/url-writer/:/golang-url-writer/logs"
+    ports:
+      - "4001:4001"
+    depends_on:
+      - "redis-primary"
+    environment:
+      - PUBSUB_CHANNEL=writer
+      - CASSANDRA_KEYSPACE=testing
+      - CASSANDRA_TABLE=dictionary
+      - PRIMARY_REDIS_ADDR=redis-primary
+      - CASSANDRA_CONNECT_POINT=10.11.1.107
+
+  redis-primary:
+    image: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - "/home/student/data/redis:/data"
+    environment:
+      - REDIS_REPLICATION_MODE=master
+    command: redis-server --appendonly yes
+
+  redis-secondary:
+    image: 'redis'
+    ports:
+      - '6380:6379'
+    depends_on:
+      - redis-primary
+    deploy: 
+      replicas: 3
+      placement:
+        max_replicas_per_node: 1
+    command: redis-server --slaveof redis-primary 6379
+
+  visualizer:
+    image: dockersamples/visualizer:stable
+    ports:
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      placement:
+        constraints: [node.role == manager]

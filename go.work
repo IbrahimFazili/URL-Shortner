@@ -1,0 +1,6 @@
+go 1.19
+
+use (
+	./url-shortner
+	./url-writer
+)
